@@ -1,6 +1,6 @@
 # TaxEval
 
-In this repo you'll find some evals for LLMs for tax questions. Here are the results as of today:
+In this repo you'll find some LLM evals in the tax domain. Here are the results as of today:
 
 |    | Model                     | Score   |
 |---:|:--------------------------|:--------|
