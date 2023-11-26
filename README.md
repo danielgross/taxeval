@@ -1,4 +1,4 @@
-# TaxEval: Zero-shot Evals in the Tax Domain for LLMs
+# TaxEval
 
 In this repo you'll find some evals for LLMs for tax questions. Here are the results as of today:
 
