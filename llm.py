@@ -61,7 +61,8 @@ async def replicate_request(input, model='mistral'):
 @retry(stop=stop_after_attempt(3))
 @log
 async def openai_request(input, model="gpt-3.5-turbo"):
-    completion = await openai.ChatCompletion.acreate(
+    client = openai.AsyncOpenAI()
+    completion = await client.chat.completions.create(
         model=model,
         messages=[
             {"role": "user", "content": input},
@@ -69,6 +70,42 @@ async def openai_request(input, model="gpt-3.5-turbo"):
     )
     result = completion.choices[0].message.content
     return result
+
+@limit_concurrency(10)
+@retry(stop=stop_after_attempt(3))
+@log
+async def openai_tooluse_request(input, model="gpt-4-1106-preview", tools=["code_interpreter"]):
+    client = openai.AsyncOpenAI()
+    assistant = await client.beta.assistants.create(
+        model=model,
+        tools=[{"type": tool} for tool in tools]
+    )
+    thread = await client.beta.threads.create(messages=[
+        {"role": "user", "content": input}
+    ])
+    run = await client.beta.threads.runs.create(
+        thread_id=thread.id,
+        assistant_id=assistant.id
+    )
+    # Poll the run until it is completed. Naively poll 10 times.
+    max_polls = 5
+    delay = 2
+    polls = 0
+    while run.status != "completed" and polls < max_polls:
+        run = await client.beta.threads.runs.retrieve(
+            run_id=run.id,
+            thread_id=thread.id,
+        )
+        if run.status == "completed":
+            messages = await client.beta.threads.messages.list(thread_id=thread.id)
+            for message in messages:
+                result = message[1][0].content[0].text.value
+                return result
+        polls += 1
+        # Increase the delay between polls
+        delay *= 2
+        await asyncio.sleep(delay)
+    raise Exception("Run did not complete in time")
 
 
 @limit_concurrency(2)
@@ -110,7 +147,8 @@ async def complete(inputs, models=None, use_cache=False):
                 if provider == 'replicate':
                     task = replicate_request(input, model=model_name)
                 elif provider == 'openai':
-                    task = openai_request(input, model=model_name)
+                    # task = openai_request(input, model=model_name)
+                    task = openai_tooluse_request(input, model=model_name)
                 elif provider == 'anthropic':
                     task = anthropic_request(input, model=model_name)
                 else:
