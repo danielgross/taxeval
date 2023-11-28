@@ -41,21 +41,38 @@ async def main():
         tasks.append(prompt)
         library[prompt] = question
 
-    responses = await llm.complete(tasks, models=[
-        'replicate/mistral-7b',
-        'openai/gpt-3.5-turbo-1106',
+    models = [
+        # 'replicate/mistral-7b',
+        # 'openai/gpt-3.5-turbo-1106',
         'openai/gpt-4-1106-preview',
-        'anthropic/claude-2'
-    ], use_cache=True)
+        # 'anthropic/claude-2'
+    ]
+
+    responses = await llm.complete(tasks, models=models, use_cache=True)
     # Process responses
-    output = []
+    output = {"responses": [], "accuracy": {}}
+
+    def model_response_to_simplified(model_response): 
+        search = re.search(r'\d', model_response[:100])
+        if search:
+            return search.group(0)
+        return "None"  # Placeholder for when we can't find a number
+    
     for r in responses:
-        output.append({
+        output["responses"].append({
             "prompt": r["prompt"],
             "full": r["responses"],
-            "simplified": {model: re.search(r'\d', r["responses"][model][:100]).group() for model in r["responses"]},
+            "simplified": {model: model_response_to_simplified(r["responses"][model]) for model in r["responses"]},
             "source_question": library[r["prompt"]]
         })
+        for model in r["responses"]:
+            correct_answer = str(library[r["prompt"]]["correct_answer"])
+            simplified_response = model_response_to_simplified(r["responses"][model])
+            if simplified_response == correct_answer:
+                output["accuracy"][model] = output["accuracy"].get(model, 0) + 1
+    for model in output["accuracy"]:
+        output["accuracy"][model] /= len(output["responses"])
+
 
     with open("output.json", "w") as f:
         print(json.dumps(output, indent=4))
